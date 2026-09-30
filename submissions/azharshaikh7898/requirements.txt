@@ -11,3 +11,6 @@ rq==2.0.0
 pytest==8.3.4
 httpx==0.28.1
 ruff==0.8.4
+pypdf==5.1.0
+pgvector==0.3.6
+fastembed==0.4.2
