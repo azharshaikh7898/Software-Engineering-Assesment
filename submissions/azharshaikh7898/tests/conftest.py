@@ -43,3 +43,16 @@ def make_user(client):
         return {"Authorization": f"Bearer {r.json()['access_token']}"}
 
     return _make
+
+
+@pytest.fixture(autouse=True)
+def qa_test_settings(monkeypatch):
+    """One fake Redis per test, and a similarity threshold suited to the fake embeddings."""
+    import fakeredis
+
+    from app import ratelimit
+    from app.config import settings
+
+    fake = fakeredis.FakeRedis()
+    monkeypatch.setattr(ratelimit, "get_redis", lambda: fake)
+    monkeypatch.setattr(settings, "min_score", 0.3)
