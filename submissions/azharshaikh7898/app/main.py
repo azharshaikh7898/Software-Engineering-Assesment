@@ -5,11 +5,12 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
 from . import models  # noqa: F401  (registers tables on Base.metadata)
 from .db import Base, engine
 from .logging_conf import request_id_var, setup_logging
-from .routes import auth, health
+from .routes import auth, documents, health
 
 setup_logging()
 log = logging.getLogger("documind")
@@ -17,6 +18,9 @@ log = logging.getLogger("documind")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    if engine.dialect.name == "postgresql":
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
     Base.metadata.create_all(engine)
     yield
 
@@ -51,4 +55,5 @@ async def request_context(request: Request, call_next):
 
 
 app.include_router(auth.router)
+app.include_router(documents.router)
 app.include_router(health.router)

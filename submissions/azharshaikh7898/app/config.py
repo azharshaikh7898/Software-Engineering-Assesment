@@ -9,6 +9,11 @@ class Settings(BaseSettings):
     jwt_secret: str  # required: no insecure default
     jwt_expire_minutes: int = 60
     max_upload_mb: int = 10
+    max_docs_per_user: int = 50
+    queue_sync: bool = False  # tests/dev only: run ingestion inline instead of via RQ
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    chunk_size: int = 800
+    chunk_overlap: int = 120
 
 
 settings = Settings()
