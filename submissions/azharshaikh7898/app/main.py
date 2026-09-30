@@ -11,6 +11,7 @@ from . import models  # noqa: F401  (registers tables on Base.metadata)
 from .db import Base, engine
 from .logging_conf import request_id_var, setup_logging
 from .routes import auth, documents, health
+from .routes import qa
 
 setup_logging()
 log = logging.getLogger("documind")
@@ -57,3 +58,4 @@ async def request_context(request: Request, call_next):
 app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(health.router)
+app.include_router(qa.router)
