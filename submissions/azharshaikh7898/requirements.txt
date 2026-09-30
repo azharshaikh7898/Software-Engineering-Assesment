@@ -14,3 +14,6 @@ ruff==0.8.4
 pypdf==5.1.0
 pgvector==0.3.6
 fastembed==0.4.2
+openai>=1.50,<2
+tenacity>=9,<10
+fakeredis>=2.26,<3

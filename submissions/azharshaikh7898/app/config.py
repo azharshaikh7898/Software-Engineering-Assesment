@@ -15,5 +15,20 @@ class Settings(BaseSettings):
     chunk_size: int = 800
     chunk_overlap: int = 120
 
+    # LLM: any OpenAI-compatible provider (defaults: Groq)
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_api_key: str = ""
+    llm_model: str = "llama-3.3-70b-versatile"
+    llm_timeout_s: float = 30.0
+    price_in_per_mtok: float = 0.0  # USD per 1M prompt tokens (0 = free tier)
+    price_out_per_mtok: float = 0.0
+
+    # retrieval and limits
+    top_k: int = 5
+    min_score: float = 0.45  # cosine-similarity gate before the LLM is called; tune with the eval
+    max_question_chars: int = 1000
+    rate_limit_per_min: int = 10
+    rate_limit_per_day: int = 100
+
 
 settings = Settings()
