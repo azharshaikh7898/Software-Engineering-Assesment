@@ -1,3 +1,5 @@
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
 import logging
 import time
 import uuid
@@ -59,3 +61,6 @@ app.include_router(auth.router)
 app.include_router(documents.router)
 app.include_router(health.router)
 app.include_router(qa.router)
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="ui")

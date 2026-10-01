@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DocuMind</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1b1f24; --muted:#667085; --card:#fff; --line:#d9dde3; --accent:#2457d6; --bad:#b42318; --ok:#067647; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#14171c; --fg:#e6e8eb; --muted:#9aa3af; --card:#1c2128; --line:#30363d; --accent:#6c93ff; --bad:#ff8a80; --ok:#5ed39b; } }
+  * { box-sizing: border-box; }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; justify-content:space-between; align-items:center; padding:12px 20px; background:var(--card); border-bottom:1px solid var(--line); }
+  header h1 { margin:0; font-size:18px; }
+  header nav a, header nav button { margin-left:14px; }
+  main { max-width:1100px; margin:20px auto; padding:0 16px; display:grid; gap:16px; grid-template-columns:minmax(0,1fr) minmax(0,1.5fr); }
+  @media (max-width:800px) { main { grid-template-columns:1fr; } }
+  section, .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; }
+  h2 { margin:0 0 10px; font-size:16px; }
+  input, textarea { width:100%; padding:8px; margin:4px 0; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--fg); font:inherit; }
+  button { padding:8px 14px; border:0; border-radius:6px; background:var(--accent); color:#fff; font:inherit; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:default; }
+  button.link { background:none; color:var(--accent); padding:0 4px; }
+  a { color:var(--accent); }
+  .muted { color:var(--muted); }
+  .msg { min-height:1.4em; margin:6px 0; color:var(--muted); }
+  .msg.bad { color:var(--bad); }
+  .doc { display:flex; flex-wrap:wrap; gap:8px; align-items:center; padding:6px 0; border-bottom:1px solid var(--line); }
+  .doc .name { flex:1; word-break:break-all; }
+  .badge { font-size:12px; padding:2px 8px; border-radius:99px; border:1px solid var(--line); }
+  .badge.ready { color:var(--ok); border-color:var(--ok); }
+  .badge.failed { color:var(--bad); border-color:var(--bad); }
+  .err { flex-basis:100%; font-size:13px; color:var(--bad); }
+  .qa { border-top:1px solid var(--line); padding:12px 0; }
+  .qa .q { font-weight:600; }
+  .qa .a { white-space:pre-wrap; margin:6px 0; }
+  .qa.refused .a { color:var(--muted); font-style:italic; }
+  .qa .meta { font-size:12px; color:var(--muted); }
+  details.cite { margin:4px 0; font-size:13px; }
+  details.cite blockquote { margin:6px 0 6px 8px; padding-left:10px; border-left:3px solid var(--line); white-space:pre-wrap; color:var(--muted); }
+  #authSec { max-width:360px; margin:40px auto; }
+  .row { display:flex; gap:8px; margin-top:8px; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DocuMind</h1>
+  <nav><a href="/docs" target="_blank" rel="noopener">API docs</a><button id="logoutBtn" class="link" hidden>Log out</button></nav>
+</header>
+
+<div id="authSec" class="card">
+  <h2>Sign up or log in</h2>
+  <input id="u" placeholder="Username (3-50 chars)" autocomplete="username">
+  <input id="p" type="password" placeholder="Password (min 8 chars)" autocomplete="current-password">
+  <div class="row"><button id="loginBtn">Log in</button><button id="signupBtn">Sign up</button></div>
+  <div id="authMsg" class="msg"></div>
+</div>
+
+<main id="appSec" hidden>
+  <section>
+    <h2>Documents</h2>
+    <input id="file" type="file" accept=".pdf,.txt,.md,.markdown">
+    <div class="row"><button id="uploadBtn">Upload</button></div>
+    <div id="upMsg" class="msg"></div>
+    <p class="muted">Tick documents to restrict a question to them. With none ticked, all ready documents are searched.</p>
+    <div id="docs"></div>
+  </section>
+  <section>
+    <h2>Ask a question</h2>
+    <textarea id="q" rows="3" placeholder="Ask something about your documents..."></textarea>
+    <div class="row"><button id="askBtn">Ask</button></div>
+    <div id="askMsg" class="msg"></div>
+    <div id="answer"></div>
+    <h2 style="margin-top:18px">Recent questions</h2>
+    <div id="history"></div>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let token = sessionStorage.getItem("token");
+const selected = new Set();
+let pollTimer = null;
+
+function el(tag, props = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else n[k] = v;
+  }
+  n.append(...kids);
+  return n;
+}
+function setMsg(id, text, bad = false) { const n = $(id); n.textContent = text; n.className = "msg" + (bad ? " bad" : ""); }
+
+async function api(path, opts = {}) {
+  const headers = { ...(opts.headers || {}) };
+  if (token) headers.Authorization = "Bearer " + token;
+  const res = await fetch(path, { ...opts, headers });
+  if (res.status === 401 && token) { logout(); throw new Error("Session expired. Please log in again."); }
+  if (res.status === 204) return null;
+  let data = null;
+  try { data = await res.json(); } catch (e) { /* non-JSON body */ }
+  if (!res.ok) {
+    const d = data && data.detail;
+    throw new Error(typeof d === "string" ? d : Array.isArray(d) ? d.map((x) => x.msg).join("; ") : "Request failed (" + res.status + ")");
+  }
+  return data;
+}
+
+async function auth(kind) {
+  setMsg("authMsg", "");
+  try {
+    const data = await api("/auth/" + kind, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username: $("u").value.trim(), password: $("p").value }),
+    });
+    token = data.access_token; sessionStorage.setItem("token", token); $("p").value = "";
+    showApp();
+  } catch (e) { setMsg("authMsg", e.message, true); }
+}
+
+function showApp() {
+  $("authSec").hidden = true; $("appSec").hidden = false; $("logoutBtn").hidden = false;
+  loadDocs(); loadHistory();
+  clearInterval(pollTimer); pollTimer = setInterval(loadDocs, 3000);
+}
+function logout() {
+  token = null; sessionStorage.removeItem("token"); clearInterval(pollTimer); selected.clear();
+  $("appSec").hidden = true; $("logoutBtn").hidden = true; $("authSec").hidden = false;
+  $("docs").replaceChildren(); $("answer").replaceChildren(); $("history").replaceChildren();
+}
+
+async function loadDocs() {
+  let docs;
+  try { docs = await api("/documents"); } catch (e) { return; }
+  const box = $("docs"); box.replaceChildren();
+  if (!docs.length) box.append(el("p", { class: "muted", textContent: "No documents yet. Upload a PDF, TXT or Markdown file." }));
+  for (const d of docs) {
+    const cb = el("input", { type: "checkbox", checked: selected.has(d.id), disabled: d.status !== "ready", style: "width:auto",
+      onchange: (e) => (e.target.checked ? selected.add(d.id) : selected.delete(d.id)) });
+    const row = el("div", { class: "doc" }, cb, el("span", { class: "name", textContent: d.filename }),
+      el("span", { class: "badge " + d.status, textContent: d.status }));
+    if (d.error) row.append(el("span", { class: "err", textContent: d.error }));
+    row.append(el("button", { class: "link", textContent: "Delete", onclick: () => delDoc(d.id, d.filename) }));
+    box.append(row);
+  }
+  for (const id of [...selected]) if (!docs.some((d) => d.id === id && d.status === "ready")) selected.delete(id);
+}
+
+async function upload() {
+  const f = $("file").files[0];
+  if (!f) { setMsg("upMsg", "Choose a file first.", true); return; }
+  const fd = new FormData(); fd.append("file", f);
+  setMsg("upMsg", "Uploading...");
+  try {
+    await api("/documents", { method: "POST", body: fd });
+    setMsg("upMsg", "Uploaded. Processing in the background..."); $("file").value = ""; loadDocs();
+  } catch (e) { setMsg("upMsg", e.message, true); }
+}
+async function delDoc(id, name) {
+  if (!confirm("Delete " + name + "? Its passages will no longer be searchable.")) return;
+  try { await api("/documents/" + id, { method: "DELETE" }); selected.delete(id); loadDocs(); }
+  catch (e) { setMsg("upMsg", e.message, true); }
+}
+
+function qaCard(r) {
+  const card = el("div", { class: "qa" + (r.refused ? " refused" : "") });
+  card.append(el("div", { class: "q", textContent: r.question || "" }), el("div", { class: "a", textContent: r.answer }));
+  (r.citations || []).forEach((c, i) => {
+    const where = c.document + (c.page ? ", page " + c.page : "");
+    card.append(el("details", { class: "cite" },
+      el("summary", { textContent: "[" + (c.ref || i + 1) + "] " + where + "  (relevance " + c.score + ")" }),
+      el("blockquote", { textContent: c.passage })));
+  });
+  const u = r.usage || {};
+  let meta = (u.total_tokens || 0) + " tokens, " + Math.round(u.latency_ms || 0) + " ms";
+  if (u.cost_usd) meta += ", $" + u.cost_usd.toFixed(5);
+  card.append(el("div", { class: "meta", textContent: meta }));
+  return card;
+}
+
+async function ask() {
+  const q = $("q").value.trim();
+  if (q.length < 3) { setMsg("askMsg", "Type a question first.", true); return; }
+  $("askBtn").disabled = true; setMsg("askMsg", "Thinking...");
+  try {
+    const body = { question: q };
+    if (selected.size) body.document_ids = [...selected];
+    const r = await api("/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    setMsg("askMsg", ""); $("answer").replaceChildren(qaCard(r)); loadHistory();
+  } catch (e) { setMsg("askMsg", e.message, true); }
+  finally { $("askBtn").disabled = false; }
+}
+async function loadHistory() {
+  try {
+    const rows = await api("/history?limit=10");
+    $("history").replaceChildren(...(rows.length ? rows.map(qaCard) : [el("p", { class: "muted", textContent: "No questions yet." })]));
+  } catch (e) { /* ignore */ }
+}
+
+$("loginBtn").addEventListener("click", () => auth("login"));
+$("signupBtn").addEventListener("click", () => auth("signup"));
+$("logoutBtn").addEventListener("click", logout);
+$("uploadBtn").addEventListener("click", upload);
+$("askBtn").addEventListener("click", ask);
+$("p").addEventListener("keydown", (e) => { if (e.key === "Enter") auth("login"); });
+if (token) showApp();
+</script>
+</body>
+</html>
