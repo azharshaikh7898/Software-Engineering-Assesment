@@ -18,8 +18,8 @@ def main():
     lines = ["| Metric | " + " | ".join(r["config"]["name"] for r in runs) + " |",
              "|---|" + "---|" * len(runs)]
     for label, key in (("Chunk size", "chunk_size"), ("Chunk overlap", "chunk_overlap"), ("Top-k", "top_k"),
-                       ("Min score", "min_score"), ("Chunks indexed", "chunks")):
-        lines.append(f"| {label} | " + " | ".join(str(r["config"][key]) for r in runs) + " |")
+                       ("Min score", "min_score"), ("Prompt", "prompt_version"), ("Chunks indexed", "chunks")):
+        lines.append(f"| {label} | " + " | ".join(str(r["config"].get(key, "v1" if key == "prompt_version" else "-")) for r in runs) + " |")
     for label, key in (("Retrieval hit rate", "retrieval_hit"), ("Answer correctness", "answer_correct"),
                        ("Citation accuracy", "citation_ok"), ("False refusals", "false_refusal"),
                        ("Correct refusals", "correct_refusal")):
