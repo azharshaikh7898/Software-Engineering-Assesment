@@ -95,7 +95,7 @@ def answer_question(db: Session, user: User, question: str, document_ids: list[s
 
     refused = answer is None
     citations = [
-        {"document_id": hits[n - 1].document_id, "document": hits[n - 1].filename, "page": hits[n - 1].page,
+        {"ref": n, "document_id": hits[n - 1].document_id, "document": hits[n - 1].filename, "page": hits[n - 1].page,
          "chunk_id": hits[n - 1].chunk_id, "passage": hits[n - 1].content, "score": round(hits[n - 1].score, 3)}
         for n in cited
     ]
