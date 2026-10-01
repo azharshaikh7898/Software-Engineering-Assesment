@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     top_k: int = 5
     min_score: float = 0.45  # cosine-similarity gate before the LLM is called; tune with the eval
     max_question_chars: int = 1000
+    prompt_version: str = "v2"  # "v1" = base rules only; "v2" adds injection-hardening (see EVALUATION.md)
     rate_limit_per_min: int = 10
     rate_limit_per_day: int = 100
 
