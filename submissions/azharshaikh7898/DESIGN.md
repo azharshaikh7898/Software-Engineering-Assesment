@@ -44,4 +44,14 @@ Every query filters by user_id; document IDs are UUIDs and 404 (not 403) for oth
 - create_all at startup instead of migrations: fine for v1, Alembic is the next step.
 
 ## 6. Changes after implementation
-(fill in at the end)
+What changed from the design above, and why:
+
+- **SQLite for unit tests, Postgres everywhere else.** Tests and CI run on SQLite (JSON embedding column, cosine similarity computed in Python) so they need no database service. The real pgvector path is exercised by `scripts/smoke.sh` against the Docker stack.
+- **Chunks never span pages.** Chunking is paragraph-aware (about 800 characters, 120 overlap) and restarts on each PDF page, so a citation's page number is exact.
+- **Ingestion retries.** The RQ job retries twice with backoff on unexpected errors. Bad input (an encrypted or unreadable PDF, no text) fails immediately with a stored reason, because retrying cannot help.
+- **Rate limiting fails closed.** Per-minute and per-day counters live in Redis. If Redis is down, `/ask` returns 503 instead of allowing unlimited LLM spend. A per-user cap of 50 documents was added.
+- **Citations carry more fields.** Each citation has the excerpt number, document id, document name, page, chunk id, the passage and the similarity score.
+- **Injection defence became layered, after the evaluation found a real leak.** The design had delimiter stripping and system rules. The evaluation showed the model obeying an injected instruction while still producing a valid citation, so a canary string in the system prompt and a stricter prompt (v2) were added. See EVALUATION.md.
+- **The UI is one static page served by FastAPI at `/`**, so there is no separate frontend service.
+- **Deployment adds Caddy** in a production compose overlay for automatic HTTPS. The API is bound to the loopback and reached by Caddy over the Docker network.
+- **Still not done:** Alembic migrations (tables are created at start-up), streaming answers, hybrid search or re-ranking, and a measured load test.
